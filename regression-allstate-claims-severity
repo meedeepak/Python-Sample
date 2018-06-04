@@ -1,0 +1,109 @@
+# -*- coding: utf-8 -*-
+
+#import os
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+import numpy as np
+import pandas as pd
+
+dataset = pd.read_csv('train.csv')
+testset = pd.read_csv('test.csv')
+
+y = dataset.iloc[:, -1]
+x = dataset.iloc[:, 1:-1]
+test = testset.iloc[:,1:]
+
+#Check for new category in test
+for i in range(116):
+    count1=set(x.iloc[:,i].unique())
+    count2=set(test.iloc[:,i].unique())
+    if not count2.issubset(count1):
+        print(i)
+        
+#Change them to max times element present in train       
+for i in range(116):    
+    count=(x.iloc[:,i]).value_counts()
+#    x.iloc[:,i] = np.where(count[x.iloc[:,i]] < 0.10*(sum(count)/len(count)), 'Others', x.iloc[:,i]) #it goes for each row    
+    unique1=set(x.iloc[:,i].unique())
+    unique2=set(test.iloc[:,i].unique())
+    
+    if not unique2.issubset(unique1):
+        for a in unique2:
+            if a not in unique1:
+                print(i,a)
+                test.iloc[:,i] = np.where(test.iloc[:,i] == a, count.index[0],test.iloc[:,i])
+
+#del count
+#
+#x=np.array(x)
+#y=np.array(y)
+#test=np.array(test)
+#
+#cont = np.array(x[:,116:],dtype=float)
+#cont_test = np.array(test[:,116:],dtype=float)
+#x=x[:,:116]
+#test=test[:,:116]
+#
+#from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+#
+#for i in range(x.shape[1]):
+#    encoder = LabelEncoder()
+#    x[:, i] = encoder.fit_transform(x[:,i])
+#    test[:, i] = encoder.transform(test[:,i])
+#    print(i)
+#    
+##train_set=np.empty(shape=(len(x),0))
+#
+##for i in range(x.shape[1],-1,-1):     
+#onehotencoder = OneHotEncoder()
+#x = onehotencoder.fit_transform(x).toarray()
+##    x = x[:,1:] 
+##    print(i)    
+#
+#x=np.array(x,dtype=float)    
+#x = np.hstack((x,cont))
+#del cont
+
+x=pd.get_dummies(x,drop_first=True)
+test=pd.get_dummies(test,drop_first=True)
+test=test.reindex(columns = x.columns, fill_value=0)
+
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+x = sc.fit_transform(x)
+test = sc.transform(test)
+
+######################################################################################################
+
+import keras
+from keras.models import Sequential
+from keras.layers import Dense
+from keras import optimizers
+from keras.regularizers import l2, l1
+
+neurons=x.shape[1]  
+
+classifier = Sequential()
+
+classifier.add(Dense(units = neurons, kernel_initializer = 'normal', activation = 'relu', input_dim = neurons))
+
+classifier.add(Dense(units = int(neurons/2), kernel_initializer = 'normal', activation = 'relu'))
+
+classifier.add(Dense(units = int(neurons/4), kernel_initializer = 'normal', activation = 'relu'))
+
+classifier.add(Dense(units = 1, kernel_initializer = 'normal', activation = 'linear'))
+
+classifier.compile(optimizer = 'rmsprop', loss = 'mean_absolute_error')
+
+classifier.fit(x, y, batch_size = 100, epochs = 10)
+
+classifier.save('model')
+
+y_pred = classifier.predict(test)
+
+submission = zip(testset.iloc[:,0],y_pred)
+f = open("submission.csv", 'w')
+f.write("id,loss\n")
+for row in submission:
+    f.write(str(row[0]) + "," + str(row[1]) + "\n")
+f.close()
